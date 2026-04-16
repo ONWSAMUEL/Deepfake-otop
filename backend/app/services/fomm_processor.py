@@ -91,7 +91,7 @@ class FOMMProcessor:
             )
 
             checkpoint = torch.load(
-                self.checkpoint_path, map_location=self.device
+                self.checkpoint_path, map_location=self.device, weights_only=False
             )
             self.generator.load_state_dict(checkpoint["generator"])
             self.kp_detector.load_state_dict(checkpoint["kp_detector"])

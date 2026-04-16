@@ -1,5 +1,5 @@
 """Job creation and status endpoints."""
-import os
+import re
 import uuid
 import logging
 from pathlib import Path
@@ -74,8 +74,20 @@ async def get_job(job_id: str, request: Request):
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
+_UUID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
+
+
 def _resolve_upload_path(file_id: str) -> str:
-    """Find the uploaded file by its UUID on local storage."""
+    """Find the uploaded file by its UUID on local storage.
+
+    Validates the ID is a proper UUID to prevent path traversal attacks —
+    a glob on unsanitised input would allow an attacker to escape UPLOAD_DIR.
+    """
+    if not _UUID_RE.match(file_id):
+        raise HTTPException(400, "ID de fichier invalide.")
     upload_dir = settings.UPLOAD_DIR
     matches = list(upload_dir.glob(f"{file_id}.*"))
     if not matches:

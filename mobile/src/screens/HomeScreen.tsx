@@ -17,7 +17,7 @@ import * as Haptics from "expo-haptics";
 import type { StackScreenProps } from "@react-navigation/stack";
 import type { RootStackParamList } from "@/navigation/AppNavigator";
 import MediaCard from "@/components/MediaCard";
-import { uploadMedia, checkHealth } from "@/services/api";
+import { uploadMedia, checkHealth, createJob } from "@/services/api";
 import { StorageService } from "@/services/storage";
 
 type Props = StackScreenProps<RootStackParamList, "Home">;
@@ -163,7 +163,6 @@ export default function HomeScreen({ navigation }: Props) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     setSubmitting(true);
     try {
-      const { createJob } = await import("@/services/api");
       const job = await createJob(sourceVideo!.fileId!, targetImage!.fileId!, lipSync);
       navigation.navigate("Processing", { jobId: job.id });
     } catch (e: any) {

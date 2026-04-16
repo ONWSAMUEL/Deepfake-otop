@@ -41,6 +41,14 @@ class Settings(BaseSettings):
     MAX_VIDEO_DURATION_SECONDS: int = 300
     PROCESSING_DEVICE: str = "auto"  # "auto" | "cuda" | "cpu"
 
+    # API / CORS
+    # Absolute URL exposed to clients — used by Celery workers to build result URLs.
+    # Example: "https://api.myapp.com"  Leave empty in local dev (auto-detected from request).
+    EXTERNAL_BASE_URL: str = ""
+    # Comma-separated list of allowed CORS origins.
+    # Example: "https://app.myapp.com,https://staging.myapp.com"
+    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
+
     class Config:
         env_file = ".env"
 

@@ -1,12 +1,28 @@
 """Celery tasks — background AI processing."""
 import os
+import json
 import logging
+
 from celery import Celery
-from celery.signals import task_prerun, task_postrun, task_failure
+import redis as redis_lib
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+# ─── Shared Redis connection pool ─────────────────────────────────────────────
+# One pool per worker process — avoids opening a new TCP connection on every call.
+_redis_pool = redis_lib.ConnectionPool.from_url(settings.REDIS_URL, decode_responses=False)
+
+
+def _redis() -> redis_lib.Redis:
+    return redis_lib.Redis(connection_pool=_redis_pool)
+
+
+def _publish(job_id: str, payload: dict):
+    """Push a JSON message to the Redis pub/sub channel for this job."""
+    _redis().publish(f"job:{job_id}", json.dumps(payload))
+
 
 # ─── Celery app ───────────────────────────────────────────────────────────────
 celery_app = Celery(
@@ -24,18 +40,19 @@ celery_app.conf.update(
 )
 
 
-# ─── WebSocket progress publisher ────────────────────────────────────────────
+# ─── Helpers ──────────────────────────────────────────────────────────────────
 
-def _publish_progress(job_id: str, step: str, percent: int, message: str = ""):
-    """Push progress updates to Redis pub/sub for WebSocket relay."""
-    import redis
-    import json
+def _build_result_url(filename: str) -> str:
+    """
+    Build an absolute result URL that remote clients can reach.
 
-    r = redis.from_url(settings.REDIS_URL)
-    payload = json.dumps(
-        {"type": "progress", "job_id": job_id, "step": step, "progress": percent, "message": message}
-    )
-    r.publish(f"job:{job_id}", payload)
+    In a Celery worker there is no HTTP request context, so we rely on
+    EXTERNAL_BASE_URL (set via env var in production).  Falls back to a
+    relative path in local dev where the API and worker share the same host.
+    """
+    from app.services.storage import storage
+    base = settings.EXTERNAL_BASE_URL.rstrip("/") if settings.EXTERNAL_BASE_URL else None
+    return storage.get_url(f"outputs/{filename}", base_url=base or "")
 
 
 # ─── Main processing task ─────────────────────────────────────────────────────
@@ -57,7 +74,9 @@ def process_deepfake(
     """
     Execute the full deepfake pipeline as a background Celery task.
 
-    Updates Redis pub/sub with progress; updates job_manager state.
+    Publishes progress to Redis pub/sub so the API WebSocket layer can relay
+    updates to connected clients.  All job state is stored in Redis so both
+    the API process and the worker process see a consistent view.
     """
     from app.services import job_manager
     from app.services.pipeline import pipeline
@@ -67,11 +86,23 @@ def process_deepfake(
 
     def progress_cb(step: str, percent: int, message: str = ""):
         job_manager.update_progress(job_id, step, percent, message)
-        _publish_progress(job_id, step, percent, message)
+        _publish(job_id, {
+            "type": "progress",
+            "job_id": job_id,
+            "step": step,
+            "progress": percent,
+            "message": message,
+        })
 
     try:
         job_manager.update_progress(job_id, "Démarrage", 0, "Initialisation du pipeline...")
-        _publish_progress(job_id, "Démarrage", 0, "Initialisation du pipeline...")
+        _publish(job_id, {
+            "type": "progress",
+            "job_id": job_id,
+            "step": "Démarrage",
+            "progress": 0,
+            "message": "Initialisation du pipeline...",
+        })
 
         output = pipeline.process(
             source_video_path=source_video_path,
@@ -81,20 +112,11 @@ def process_deepfake(
             progress_cb=progress_cb,
         )
 
-        # Determine public URL
-        from app.services.storage import storage
-        from app.config import settings as cfg
         filename = os.path.basename(output)
-        result_url = storage.get_url(f"outputs/{filename}")
+        result_url = _build_result_url(filename)
 
         job_manager.mark_completed(job_id, result_url)
-
-        import redis, json
-        r = redis.from_url(settings.REDIS_URL)
-        r.publish(
-            f"job:{job_id}",
-            json.dumps({"type": "completed", "job_id": job_id, "result_url": result_url}),
-        )
+        _publish(job_id, {"type": "completed", "job_id": job_id, "result_url": result_url})
 
         return {"status": "completed", "result_url": result_url}
 
@@ -102,11 +124,5 @@ def process_deepfake(
         error_msg = str(exc)
         logger.exception(f"Job {job_id} failed: {error_msg}")
         job_manager.mark_failed(job_id, error_msg)
-
-        import redis, json
-        r = redis.from_url(settings.REDIS_URL)
-        r.publish(
-            f"job:{job_id}",
-            json.dumps({"type": "error", "job_id": job_id, "error": error_msg}),
-        )
+        _publish(job_id, {"type": "error", "job_id": job_id, "error": error_msg})
         raise
