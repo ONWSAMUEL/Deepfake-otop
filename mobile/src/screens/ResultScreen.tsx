@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -6,12 +6,14 @@ import {
   Alert,
   StyleSheet,
   ScrollView,
+  Animated,
 } from "react-native";
-import { StatusBar } from "expo-status-bar";
-import { Video, ResizeMode } from "expo-av";
+import { Video, ResizeMode, type AVPlaybackStatus } from "expo-av";
+import { LinearGradient } from "expo-linear-gradient";
 import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system";
+import * as Haptics from "expo-haptics";
 import type { StackScreenProps } from "@react-navigation/stack";
 import type { RootStackParamList } from "@/navigation/AppNavigator";
 
@@ -19,102 +21,147 @@ type Props = StackScreenProps<RootStackParamList, "Result">;
 
 export default function ResultScreen({ navigation, route }: Props) {
   const { jobId, resultUrl } = route.params;
-  const [downloading, setDownloading] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [savedToGallery, setSavedToGallery] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const videoRef = useRef<Video>(null);
+  const successAnim = useRef(new Animated.Value(0)).current;
 
+  const onPlaybackStatusUpdate = (status: AVPlaybackStatus) => {
+    if (status.isLoaded) setIsPlaying(status.isPlaying);
+  };
+
+  // ─── Download to gallery ───────────────────────────────────────────────────
   const handleSaveToGallery = async () => {
     const { status } = await MediaLibrary.requestPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("Permission refusée", "Accès à la galerie nécessaire.");
+      Alert.alert(
+        "Permission refusée",
+        "Veuillez autoriser l'accès à la galerie dans les paramètres de l'application."
+      );
       return;
     }
 
-    setDownloading(true);
+    setLoading(true);
     try {
-      const localPath = FileSystem.cacheDirectory + `deepfake_${jobId?.slice(0, 8)}.mp4`;
-      await FileSystem.downloadAsync(resultUrl, localPath);
-      await MediaLibrary.saveToLibraryAsync(localPath);
-      Alert.alert("Enregistré !", "La vidéo a été sauvegardée dans votre galerie.");
+      const localPath = `${FileSystem.cacheDirectory}deepfake_${jobId.slice(0, 8)}.mp4`;
+      const { uri } = await FileSystem.downloadAsync(resultUrl, localPath);
+      await MediaLibrary.saveToLibraryAsync(uri);
+      setSavedToGallery(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      Animated.sequence([
+        Animated.timing(successAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
+        Animated.delay(2000),
+        Animated.timing(successAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
+      ]).start();
     } catch (e: any) {
-      Alert.alert("Erreur", e?.message || "Impossible de sauvegarder.");
+      Alert.alert("Erreur", e?.message || "Impossible d'enregistrer la vidéo.");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
-      setDownloading(false);
+      setLoading(false);
     }
   };
 
+  // ─── Share ─────────────────────────────────────────────────────────────────
   const handleShare = async () => {
     if (!(await Sharing.isAvailableAsync())) {
       Alert.alert("Non disponible", "Le partage n'est pas disponible sur cet appareil.");
       return;
     }
-
-    setDownloading(true);
+    setLoading(true);
     try {
-      const localPath = FileSystem.cacheDirectory + `deepfake_${jobId?.slice(0, 8)}.mp4`;
-      await FileSystem.downloadAsync(resultUrl, localPath);
-      await Sharing.shareAsync(localPath, { mimeType: "video/mp4" });
+      const localPath = `${FileSystem.cacheDirectory}share_${jobId.slice(0, 8)}.mp4`;
+      const { uri } = await FileSystem.downloadAsync(resultUrl, localPath);
+      await Sharing.shareAsync(uri, { mimeType: "video/mp4", dialogTitle: "Partager la vidéo" });
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch (e: any) {
       Alert.alert("Erreur", e?.message);
     } finally {
-      setDownloading(false);
+      setLoading(false);
     }
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <StatusBar style="light" />
-
-      {/* Success badge */}
-      <View style={styles.badge}>
-        <Text style={styles.badgeText}>✓ Traitement terminé</Text>
-      </View>
-
-      <Text style={styles.title}>Votre vidéo est prête !</Text>
-      <Text style={styles.subtitle}>
-        La personne a été remplacée avec les mêmes gestes, mouvements et paroles.
-      </Text>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      bounces={false}
+    >
+      {/* Success header */}
+      <LinearGradient colors={["#052e16", "#030712"]} style={styles.header}>
+        <View style={styles.successBadge}>
+          <Text style={styles.successBadgeText}>✓ Traitement terminé</Text>
+        </View>
+        <Text style={styles.title}>Votre vidéo est prête !</Text>
+        <Text style={styles.subtitle}>
+          La personne a été remplacée avec les mêmes gestes, mouvements et paroles.
+        </Text>
+      </LinearGradient>
 
       {/* Video player */}
       <View style={styles.videoCard}>
         <Video
+          ref={videoRef}
           source={{ uri: resultUrl }}
           style={styles.video}
           resizeMode={ResizeMode.CONTAIN}
           useNativeControls
           shouldPlay
           isLooping
+          onPlaybackStatusUpdate={onPlaybackStatusUpdate}
         />
       </View>
 
+      {/* Saved confirmation */}
+      <Animated.View style={[styles.savedMsg, { opacity: successAnim }]}>
+        <Text style={styles.savedMsgText}>✓ Vidéo enregistrée dans la galerie</Text>
+      </Animated.View>
+
       {/* Actions */}
-      <TouchableOpacity
-        style={[styles.btnPrimary, downloading && styles.btnDisabled]}
-        onPress={handleSaveToGallery}
-        disabled={downloading}
-      >
-        <Text style={styles.btnPrimaryText}>
-          {downloading ? "Téléchargement..." : "⬇ Enregistrer dans la galerie"}
-        </Text>
-      </TouchableOpacity>
+      <View style={styles.actions}>
+        <TouchableOpacity
+          style={[styles.btn, styles.btnPrimary, loading && styles.btnDisabled]}
+          onPress={handleSaveToGallery}
+          disabled={loading || savedToGallery}
+        >
+          <LinearGradient
+            colors={savedToGallery ? ["#14532d", "#14532d"] : ["#4361ee", "#7209b7"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.btnGradient}
+          >
+            <Text style={styles.btnTextPrimary}>
+              {savedToGallery
+                ? "✓ Enregistrée dans la galerie"
+                : loading
+                ? "Enregistrement..."
+                : "⬇  Enregistrer dans la galerie"}
+            </Text>
+          </LinearGradient>
+        </TouchableOpacity>
 
-      <TouchableOpacity
-        style={[styles.btnSecondary, downloading && styles.btnDisabled]}
-        onPress={handleShare}
-        disabled={downloading}
-      >
-        <Text style={styles.btnSecondaryText}>↗ Partager la vidéo</Text>
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.btn, styles.btnSecondary, loading && styles.btnDisabled]}
+          onPress={handleShare}
+          disabled={loading}
+        >
+          <Text style={styles.btnTextSecondary}>↗  Partager la vidéo</Text>
+        </TouchableOpacity>
 
-      <TouchableOpacity
-        style={styles.btnSecondary}
-        onPress={() => navigation.popToTop()}
-      >
-        <Text style={styles.btnSecondaryText}>↺ Nouvelle vidéo</Text>
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.btn, styles.btnSecondary]}
+          onPress={() => navigation.popToTop()}
+        >
+          <Text style={styles.btnTextSecondary}>↺  Nouvelle vidéo</Text>
+        </TouchableOpacity>
+      </View>
 
-      {/* Ethics reminder */}
-      <View style={styles.disclaimer}>
-        <Text style={styles.disclaimerText}>
-          Rappel : ce contenu doit être utilisé à des fins créatives ou éducatives uniquement.
+      {/* Metadata */}
+      <View style={styles.meta}>
+        <Text style={styles.metaText}>Job ID : {jobId}</Text>
+        <Text style={styles.disclaimer}>
+          Ce contenu doit être utilisé à des fins créatives ou éducatives uniquement.
         </Text>
       </View>
     </ScrollView>
@@ -123,18 +170,25 @@ export default function ResultScreen({ navigation, route }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#030712" },
-  content: { padding: 20, paddingBottom: 40, alignItems: "center" },
-  badge: { backgroundColor: "#052e16", borderRadius: 999, paddingHorizontal: 14, paddingVertical: 6, borderWidth: 1, borderColor: "#166534", marginTop: 24, marginBottom: 16 },
-  badgeText: { color: "#4ade80", fontSize: 13, fontWeight: "600" },
-  title: { fontSize: 24, fontWeight: "800", color: "#f9fafb", textAlign: "center" },
-  subtitle: { fontSize: 13, color: "#6b7280", textAlign: "center", marginTop: 8, marginBottom: 20 },
-  videoCard: { backgroundColor: "#111827", borderRadius: 16, overflow: "hidden", width: "100%", aspectRatio: 16 / 9, marginBottom: 20 },
+  content: { paddingBottom: 48 },
+  header: { alignItems: "center", paddingTop: 48, paddingBottom: 28, paddingHorizontal: 20 },
+  successBadge: { backgroundColor: "#166534", borderRadius: 999, paddingHorizontal: 16, paddingVertical: 6, marginBottom: 14 },
+  successBadgeText: { color: "#4ade80", fontSize: 13, fontWeight: "700" },
+  title: { color: "#f1f5f9", fontSize: 24, fontWeight: "800", textAlign: "center" },
+  subtitle: { color: "#64748b", fontSize: 14, textAlign: "center", marginTop: 8, lineHeight: 22 },
+  videoCard: { margin: 16, borderRadius: 20, overflow: "hidden", backgroundColor: "#000", aspectRatio: 16 / 9 },
   video: { width: "100%", height: "100%" },
-  btnPrimary: { backgroundColor: "#4361ee", borderRadius: 14, padding: 16, alignItems: "center", width: "100%", marginBottom: 10 },
-  btnPrimaryText: { color: "#fff", fontSize: 16, fontWeight: "700" },
-  btnSecondary: { backgroundColor: "#111827", borderRadius: 14, padding: 16, alignItems: "center", width: "100%", marginBottom: 10, borderWidth: 1, borderColor: "#1f2937" },
-  btnSecondaryText: { color: "#d1d5db", fontSize: 15, fontWeight: "600" },
+  savedMsg: { alignSelf: "center", backgroundColor: "#14532d", paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, marginBottom: 8 },
+  savedMsgText: { color: "#4ade80", fontSize: 13, fontWeight: "600" },
+  actions: { paddingHorizontal: 16, gap: 10 },
+  btn: { borderRadius: 16, overflow: "hidden" },
+  btnPrimary: {},
+  btnSecondary: { backgroundColor: "#0f172a", paddingVertical: 16, alignItems: "center", borderWidth: 1.5, borderColor: "#1e293b" },
   btnDisabled: { opacity: 0.5 },
-  disclaimer: { marginTop: 12, padding: 12, backgroundColor: "#1c1708", borderRadius: 12, borderWidth: 1, borderColor: "#78350f", width: "100%" },
-  disclaimerText: { color: "#b45309", fontSize: 11, textAlign: "center" },
+  btnGradient: { paddingVertical: 18, alignItems: "center" },
+  btnTextPrimary: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  btnTextSecondary: { color: "#cbd5e1", fontSize: 15, fontWeight: "600" },
+  meta: { margin: 16, marginTop: 24, alignItems: "center", gap: 6 },
+  metaText: { color: "#1e293b", fontSize: 11 },
+  disclaimer: { color: "#78350f", fontSize: 11, textAlign: "center", lineHeight: 16 },
 });

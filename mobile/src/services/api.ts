@@ -1,14 +1,17 @@
 import axios from "axios";
+import { StorageService } from "./storage";
 import type { UploadResponse, JobResponse } from "@/types";
 
-// Change to your backend URL (local dev or production)
-const API_BASE = process.env.EXPO_PUBLIC_API_URL
-  ? `${process.env.EXPO_PUBLIC_API_URL}/api/v1`
-  : "http://localhost:8000/api/v1";
+// Build axios instance with dynamic base URL
+async function getHttp() {
+  const apiUrl = await StorageService.getApiUrl();
+  return axios.create({
+    baseURL: `${apiUrl}/api/v1`,
+    timeout: 60_000,
+  });
+}
 
-const http = axios.create({ baseURL: API_BASE, timeout: 30000 });
-
-// ─── Upload ───────────────────────────────────────────────────────────────────
+// ─── Media upload ─────────────────────────────────────────────────────────────
 
 export async function uploadMedia(
   uri: string,
@@ -17,8 +20,9 @@ export async function uploadMedia(
   mediaType: "source_video" | "target_image",
   onProgress?: (percent: number) => void
 ): Promise<UploadResponse> {
+  const http = await getHttp();
   const form = new FormData();
-  // React Native FormData accepts { uri, name, type }
+  // React Native FormData requires { uri, name, type }
   form.append("file", { uri, name: filename, type: mimeType } as any);
   form.append("media_type", mediaType);
 
@@ -40,6 +44,7 @@ export async function createJob(
   targetImageId: string,
   lipSync: boolean = true
 ): Promise<JobResponse> {
+  const http = await getHttp();
   const { data } = await http.post<JobResponse>("/jobs", {
     source_video_id: sourceVideoId,
     target_image_id: targetImageId,
@@ -54,14 +59,27 @@ export async function createJob(
 }
 
 export async function pollJob(jobId: string): Promise<JobResponse> {
+  const http = await getHttp();
   const { data } = await http.get<JobResponse>(`/jobs/${jobId}`);
   return data;
 }
 
 // ─── WebSocket URL ────────────────────────────────────────────────────────────
 
-export function buildWsUrl(jobId: string): string {
-  const base = (process.env.EXPO_PUBLIC_API_URL || "http://localhost:8000")
-    .replace(/^http/, "ws");
-  return `${base}/ws/jobs/${jobId}`;
+export async function buildWsUrl(jobId: string): Promise<string> {
+  const apiUrl = await StorageService.getApiUrl();
+  const wsBase = apiUrl.replace(/^http/, "ws");
+  return `${wsBase}/ws/jobs/${jobId}`;
+}
+
+// ─── Health check ─────────────────────────────────────────────────────────────
+
+export async function checkHealth(): Promise<boolean> {
+  try {
+    const apiUrl = await StorageService.getApiUrl();
+    const { data } = await axios.get(`${apiUrl}/health`, { timeout: 5000 });
+    return data?.status === "ok";
+  } catch {
+    return false;
+  }
 }

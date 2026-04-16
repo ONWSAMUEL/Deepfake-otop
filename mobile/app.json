@@ -3,21 +3,29 @@
     "name": "Deepfake OTOP",
     "slug": "deepfake-otop",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
+    "backgroundColor": "#030712",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#030712"
     },
+    "scheme": "deepfake-otop",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.otop.deepfake",
+      "buildNumber": "1",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Accès à la galerie pour sélectionner une image ou une vidéo.",
-        "NSCameraUsageDescription": "Accès à la caméra pour capturer une vidéo ou photo.",
-        "NSMicrophoneUsageDescription": "Accès au microphone pour l'enregistrement vidéo."
+        "NSPhotoLibraryAddUsageDescription": "Enregistrer la vidéo traitée dans votre galerie.",
+        "NSCameraUsageDescription": "Accès à la caméra pour filmer une vidéo.",
+        "NSMicrophoneUsageDescription": "Accès au microphone pour l'enregistrement vidéo.",
+        "UIRequiresFullScreen": true
       }
     },
     "android": {
@@ -26,23 +34,50 @@
         "backgroundColor": "#030712"
       },
       "package": "com.otop.deepfake",
+      "versionCode": 1,
       "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO"
       ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
     },
     "plugins": [
       "expo-router",
-      "expo-av",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Accès à la caméra pour filmer.",
+          "microphonePermission": "Accès au microphone pour l'enregistrement.",
+          "recordAudioAndroid": true
+        }
+      ],
       [
         "expo-image-picker",
-        { "photosPermission": "Accès à la galerie photo." }
+        {
+          "photosPermission": "Accès à la galerie photo et vidéo.",
+          "cameraPermission": "Accès à la caméra."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Accès à la galerie.",
+          "savePhotosPermission": "Enregistrer les vidéos traitées.",
+          "isAccessMediaLocationEnabled": true
+        }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "VOTRE-EAS-PROJECT-ID"
+      }
+    }
   }
 }

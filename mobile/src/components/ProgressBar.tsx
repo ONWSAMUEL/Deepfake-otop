@@ -1,26 +1,45 @@
-import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import React, { useEffect, useRef } from "react";
+import { View, Text, StyleSheet, Animated } from "react-native";
 
 interface ProgressBarProps {
   progress: number;
   step: string;
   message?: string;
+  color?: string;
 }
 
-export default function ProgressBar({ progress, step, message }: ProgressBarProps) {
+export default function ProgressBar({
+  progress,
+  step,
+  message,
+  color = "#4361ee",
+}: ProgressBarProps) {
+  const anim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: Math.min(100, Math.max(0, progress)),
+      duration: 600,
+      useNativeDriver: false,
+    }).start();
+  }, [progress]);
+
+  const width = anim.interpolate({
+    inputRange: [0, 100],
+    outputRange: ["0%", "100%"],
+  });
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.step} numberOfLines={1}>
+        <Text style={styles.step} numberOfLines={2}>
           {step}
         </Text>
-        <Text style={styles.percent}>{progress}%</Text>
+        <Text style={[styles.percent, { color }]}>{Math.round(progress)}%</Text>
       </View>
 
       <View style={styles.track}>
-        <View
-          style={[styles.fill, { width: `${Math.min(100, Math.max(0, progress))}%` }]}
-        />
+        <Animated.View style={[styles.fill, { width, backgroundColor: color }]} />
       </View>
 
       {!!message && (
@@ -37,34 +56,37 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
+    alignItems: "flex-start",
+    marginBottom: 10,
+    gap: 8,
   },
   step: {
-    color: "#d1d5db",
+    color: "#cbd5e1",
     fontSize: 14,
+    fontWeight: "600",
     flex: 1,
-    marginRight: 8,
+    lineHeight: 20,
   },
   percent: {
-    color: "#4361ee",
-    fontSize: 14,
-    fontWeight: "700",
+    fontSize: 16,
+    fontWeight: "800",
+    minWidth: 44,
+    textAlign: "right",
   },
   track: {
     height: 8,
-    backgroundColor: "#1f2937",
+    backgroundColor: "#1e293b",
     borderRadius: 999,
     overflow: "hidden",
   },
   fill: {
     height: "100%",
-    backgroundColor: "#4361ee",
     borderRadius: 999,
   },
   message: {
-    color: "#6b7280",
+    color: "#475569",
     fontSize: 12,
-    marginTop: 6,
+    marginTop: 8,
+    fontStyle: "italic",
   },
 });

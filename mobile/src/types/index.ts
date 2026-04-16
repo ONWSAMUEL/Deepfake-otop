@@ -21,3 +21,13 @@ export interface JobResponse {
   created_at: string;
   updated_at: string;
 }
+
+export interface WSMessage {
+  type: "progress" | "completed" | "error";
+  job_id: string;
+  step?: string;
+  progress?: number;
+  message?: string;
+  result_url?: string;
+  error?: string;
+}
