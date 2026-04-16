@@ -1,6 +1,21 @@
+output "api_url" {
+  description = "Public HTTPS URL for the API (api.otopgestion.com)"
+  value       = local.api_url
+}
+
+output "app_url" {
+  description = "Public HTTPS URL for the frontend app (app.otopgestion.com)"
+  value       = local.app_url
+}
+
 output "alb_dns_name" {
-  description = "DNS name of the Application Load Balancer (API endpoint)"
+  description = "Raw DNS name of the Application Load Balancer"
   value       = aws_lb.api.dns_name
+}
+
+output "name_servers" {
+  description = "Route 53 name servers — set these as NS records at your registrar"
+  value       = aws_route53_zone.main.name_servers
 }
 
 output "cloudfront_domain" {

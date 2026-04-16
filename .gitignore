@@ -68,6 +68,8 @@ infrastructure/terraform/.terraform.lock.hcl
 secrets/
 .env.local
 .env.production
+# VITE_ variables are public (baked into the JS bundle) — safe to commit
+!frontend/.env.production
 
 # Logs
 *.log

@@ -96,3 +96,23 @@ variable "secret_key" {
   type        = string
   sensitive   = true
 }
+
+# ─── Domain ───────────────────────────────────────────────────────────────────
+
+variable "domain_name" {
+  description = "Root domain name (must exist as a Route 53 hosted zone, or one will be created)"
+  type        = string
+  default     = "otopgestion.com"
+}
+
+variable "api_subdomain" {
+  description = "Subdomain for the API backend"
+  type        = string
+  default     = "api"
+}
+
+variable "app_subdomain" {
+  description = "Subdomain for the frontend web app"
+  type        = string
+  default     = "app"
+}

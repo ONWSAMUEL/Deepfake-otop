@@ -10,7 +10,7 @@ const KEYS = {
   ETHICS_ACCEPTED: "settings:ethics_accepted",
 };
 
-const DEFAULT_API_URL = "http://192.168.1.100:8000"; // Update to your server IP
+const DEFAULT_API_URL = "https://api.otopgestion.com";
 
 export const StorageService = {
   // ─── API URL ──────────────────────────────────────────────────────────────

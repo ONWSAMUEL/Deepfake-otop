@@ -89,14 +89,6 @@ resource "aws_cloudwatch_log_group" "worker" {
   retention_in_days = 30
 }
 
-# ─── ACM Certificate (HTTPS) ──────────────────────────────────────────────────
-
-variable "acm_certificate_arn" {
-  description = "ARN of an ACM certificate for HTTPS on the ALB (us-east-1 or same region as ALB)"
-  type        = string
-  default     = ""
-}
-
 # ─── ALB ──────────────────────────────────────────────────────────────────────
 
 resource "aws_lb" "api" {
@@ -123,49 +115,36 @@ resource "aws_lb_target_group" "api" {
   }
 }
 
-# HTTP listener — redirects to HTTPS when a certificate is provided, otherwise
-# forwards directly (useful for initial bring-up without a domain).
+# HTTP listener — permanently redirects to HTTPS.
 resource "aws_lb_listener" "api_http" {
   load_balancer_arn = aws_lb.api.arn
   port              = 80
   protocol          = "HTTP"
 
   default_action {
-    type = var.acm_certificate_arn != "" ? "redirect" : "forward"
-
-    dynamic "redirect" {
-      for_each = var.acm_certificate_arn != "" ? [1] : []
-      content {
-        port        = "443"
-        protocol    = "HTTPS"
-        status_code = "HTTP_301"
-      }
-    }
-
-    dynamic "forward" {
-      for_each = var.acm_certificate_arn == "" ? [1] : []
-      content {
-        target_group {
-          arn = aws_lb_target_group.api.arn
-        }
-      }
+    type = "redirect"
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
     }
   }
 }
 
-# HTTPS listener — only created when an ACM certificate ARN is provided.
+# HTTPS listener — uses the ACM certificate issued for api.otopgestion.com.
 resource "aws_lb_listener" "api_https" {
-  count             = var.acm_certificate_arn != "" ? 1 : 0
   load_balancer_arn = aws_lb.api.arn
   port              = 443
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  certificate_arn   = var.acm_certificate_arn
+  certificate_arn   = aws_acm_certificate_validation.main.certificate_arn
 
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.api.arn
   }
+
+  depends_on = [aws_acm_certificate_validation.main]
 }
 
 # ─── ECS Task Definition — API (Fargate) ─────────────────────────────────────
@@ -192,8 +171,8 @@ resource "aws_ecs_task_definition" "api" {
       { name = "CLOUDFRONT_DOMAIN", value = aws_cloudfront_distribution.media.domain_name },
       { name = "CELERY_BROKER_URL", value = "redis://${aws_elasticache_cluster.redis.cache_nodes[0].address}:6379/0" },
       { name = "REDIS_URL",         value = "redis://${aws_elasticache_cluster.redis.cache_nodes[0].address}:6379/0" },
-      { name = "EXTERNAL_BASE_URL", value = "https://${aws_lb.api.dns_name}" },
-      { name = "CORS_ORIGINS",      value = "https://${aws_cloudfront_distribution.media.domain_name}" },
+      { name = "EXTERNAL_BASE_URL", value = local.api_url },
+      { name = "CORS_ORIGINS",      value = local.app_url },
     ]
 
     secrets = [
@@ -240,7 +219,7 @@ resource "aws_ecs_service" "api" {
     container_port   = 8000
   }
 
-  depends_on = [aws_lb_listener.api_http]
+  depends_on = [aws_lb_listener.api_https]
 }
 
 # ─── ECS Task Definition — Celery GPU Worker (EC2) ───────────────────────────
@@ -279,7 +258,7 @@ resource "aws_ecs_task_definition" "worker" {
       { name = "CLOUDFRONT_DOMAIN", value = aws_cloudfront_distribution.media.domain_name },
       { name = "CELERY_BROKER_URL", value = "redis://${aws_elasticache_cluster.redis.cache_nodes[0].address}:6379/0" },
       { name = "REDIS_URL",         value = "redis://${aws_elasticache_cluster.redis.cache_nodes[0].address}:6379/0" },
-      { name = "EXTERNAL_BASE_URL", value = "https://${aws_lb.api.dns_name}" },
+      { name = "EXTERNAL_BASE_URL", value = local.api_url },
     ]
 
     secrets = [
