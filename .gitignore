@@ -1,0 +1,79 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+*.env
+!.env.example
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+dist/
+.next/
+out/
+
+# React Native / Expo
+.expo/
+.expo-shared/
+android/
+ios/
+
+# AI Models (large files - download separately)
+models/*.pth
+models/*.pth.tar
+models/*.onnx
+models/*.pkl
+models/first-order-model/
+models/Wav2Lip/
+
+# Uploads & Outputs (runtime data)
+backend/uploads/
+backend/outputs/
+backend/tmp/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Terraform
+infrastructure/terraform/.terraform/
+infrastructure/terraform/*.tfstate
+infrastructure/terraform/*.tfstate.backup
+infrastructure/terraform/*.tfplan
+infrastructure/terraform/.terraform.lock.hcl
+
+# Secrets
+*.pem
+*.key
+*.cert
+*.p12
+secrets/
+.env.local
+.env.production
+
+# Logs
+*.log
+logs/
+
+# Coverage
+coverage/
+.coverage
+htmlcov/

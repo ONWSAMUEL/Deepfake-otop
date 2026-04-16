@@ -1,0 +1,9 @@
+aws_region           = "us-east-1"
+project_name         = "deepfake-otop"
+environment          = "production"
+s3_bucket_name       = "deepfake-otop-media-YOURACCOUNTID"
+secret_key           = "change-me-to-a-random-secret"
+worker_instance_type = "g4dn.xlarge"
+worker_min_count     = 1
+worker_max_count     = 2
+redis_node_type      = "cache.t3.small"

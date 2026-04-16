@@ -1,0 +1,79 @@
+version: "3.9"
+
+services:
+  # ─── Redis (job queue & cache) ──────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ─── Backend API ─────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./models:/app/models
+      - uploads_data:/app/uploads
+      - outputs_data:/app/outputs
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - STORAGE_BACKEND=local
+      - UPLOAD_DIR=/app/uploads
+      - OUTPUT_DIR=/app/outputs
+      - MODELS_DIR=/app/models
+      - FOMM_DIR=/app/models/first-order-model
+      - WAV2LIP_DIR=/app/models/Wav2Lip
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # ─── Celery Worker (AI processing) ───────────────────────────────────────────
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    volumes:
+      - ./backend:/app
+      - ./models:/app/models
+      - uploads_data:/app/uploads
+      - outputs_data:/app/outputs
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - STORAGE_BACKEND=local
+      - UPLOAD_DIR=/app/uploads
+      - OUTPUT_DIR=/app/outputs
+      - MODELS_DIR=/app/models
+      - FOMM_DIR=/app/models/first-order-model
+      - WAV2LIP_DIR=/app/models/Wav2Lip
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: celery -A app.workers.tasks worker --loglevel=info --concurrency=1 -Q deepfake
+
+  # ─── Frontend Web ─────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+
+volumes:
+  uploads_data:
+  outputs_data:
