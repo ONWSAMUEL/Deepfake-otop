@@ -14,6 +14,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
+# M16: Create a non-root user — never run application code as root
+RUN groupadd -r appuser && useradd -r -g appuser -d /app -s /sbin/nologin appuser
+
 WORKDIR /app
 
 # ─── Python dependencies ─────────────────────────────────────────────────────
@@ -24,7 +27,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # ─── Runtime directories ─────────────────────────────────────────────────────
-RUN mkdir -p /app/uploads /app/outputs /app/models/checkpoints
+RUN mkdir -p /app/uploads /app/outputs /app/models/checkpoints \
+    && chown -R appuser:appuser /app
+
+# M16: Switch to non-root user before starting the process
+USER appuser
 
 # ─── Health check ────────────────────────────────────────────────────────────
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

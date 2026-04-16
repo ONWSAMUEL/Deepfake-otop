@@ -10,12 +10,11 @@ resource "aws_route53_zone" "main" {
 
 # ─── ACM Certificate ──────────────────────────────────────────────────────────
 #
-# A single certificate covers both subdomains (SANs).
-# CloudFront requires ACM certificates in us-east-1.  If you deploy the rest
-# of the stack in another region, add a second provider alias for us-east-1
-# and attach it to this resource.
+# C13: CloudFront requires ACM certificates in us-east-1 — attach the
+# us_east_1 provider alias so this resource is created in the correct region.
 
 resource "aws_acm_certificate" "main" {
+  provider                  = aws.us_east_1
   domain_name               = "${var.api_subdomain}.${var.domain_name}"
   subject_alternative_names = ["${var.app_subdomain}.${var.domain_name}"]
   validation_method         = "DNS"
@@ -45,6 +44,7 @@ resource "aws_route53_record" "cert_validation" {
 }
 
 resource "aws_acm_certificate_validation" "main" {
+  provider                = aws.us_east_1
   certificate_arn         = aws_acm_certificate.main.arn
   validation_record_fqdns = [for r in aws_route53_record.cert_validation : r.fqdn]
 }

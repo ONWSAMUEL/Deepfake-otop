@@ -78,7 +78,7 @@ class FOMMProcessor:
             from modules.keypoint_detector import KPDetector
 
             with open(self.config_path) as f:
-                config = yaml.full_load(f)
+                config = yaml.safe_load(f)  # C3: safe_load prevents arbitrary object deserialisation
 
             mp = config["model_params"]
             common = mp["common_params"]
@@ -212,7 +212,7 @@ class FOMMProcessor:
         fomm_dir = Path(fomm_dir)
         config_path = fomm_dir / config_name
         cmd = [
-            "python", str(fomm_dir / "demo.py"),
+            sys.executable, str(fomm_dir / "demo.py"),
             "--config", str(config_path),
             "--checkpoint", checkpoint_path,
             "--source_image", source_image_path,

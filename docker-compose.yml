@@ -5,8 +5,10 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    # C8: Bind to loopback only — Redis has no password in this compose file
+    # so exposing it on 0.0.0.0 would allow anyone on the network to connect.
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -22,10 +24,14 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./backend:/app
-      - ./models:/app/models
+      # C7: No source bind-mount in production — image contains the app code.
+      # For local development, uncomment the line below and add --reload to CMD.
+      # - ./backend:/app
+      - ./models:/app/models:ro
       - uploads_data:/app/uploads
       - outputs_data:/app/outputs
+    env_file:
+      - ./backend/.env
     environment:
       - REDIS_URL=redis://redis:6379/0
       - STORAGE_BACKEND=local
@@ -39,7 +45,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    # C7: No --reload in production — it exposes the source tree and slows startup
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
 
   # ─── Celery Worker (AI processing) ───────────────────────────────────────────
   worker:
@@ -48,10 +55,13 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     volumes:
-      - ./backend:/app
-      - ./models:/app/models
+      # C7: No source bind-mount in production
+      # - ./backend:/app
+      - ./models:/app/models:ro
       - uploads_data:/app/uploads
       - outputs_data:/app/outputs
+    env_file:
+      - ./backend/.env
     environment:
       - REDIS_URL=redis://redis:6379/0
       - STORAGE_BACKEND=local
@@ -77,6 +87,9 @@ services:
       - "3000:80"
     environment:
       - VITE_API_URL=http://localhost:8000
+    # m52: Frontend depends on API being healthy before serving
+    depends_on:
+      - api
 
 volumes:
   uploads_data:

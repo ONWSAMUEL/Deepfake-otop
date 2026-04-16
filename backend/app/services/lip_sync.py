@@ -10,8 +10,12 @@ References:
 import subprocess
 import logging
 import os
+import sys
 from pathlib import Path
 from typing import Optional
+
+# M7: Timeout for the Wav2Lip subprocess (seconds)
+_WAV2LIP_TIMEOUT = 1800  # 30 min — long videos can take time on CPU
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +66,7 @@ class LipSyncService:
         inference_script = self.wav2lip_dir / "inference.py"
 
         cmd = [
-            "python", str(inference_script),
+            sys.executable, str(inference_script),  # m15: use active venv interpreter
             "--checkpoint_path", str(self.checkpoint_path),
             "--face", face_video_path,
             "--audio", audio_path,
@@ -79,6 +83,7 @@ class LipSyncService:
             capture_output=True,
             text=True,
             cwd=str(self.wav2lip_dir),
+            timeout=_WAV2LIP_TIMEOUT,  # M7: prevent infinite hangs
         )
 
         if result.returncode != 0:

@@ -1,0 +1,53 @@
+# M17: Exclude files that must never land inside the Docker image
+
+# Secrets and environment files
+.env
+.env.*
+!.env.example
+
+# Runtime data — mounted as volumes at runtime
+uploads/
+outputs/
+tmp/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Development tools
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Tests and coverage
+tests/
+.coverage
+htmlcov/
+coverage/
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Large AI model files — download separately via setup_models.sh
+models/

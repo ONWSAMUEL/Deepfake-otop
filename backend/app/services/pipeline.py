@@ -7,6 +7,7 @@ Steps:
   3. Wav2Lip: sync lips of animated video with source audio → final result.
 """
 import os
+import shutil  # m7: top-level import
 import uuid
 import logging
 import tempfile
@@ -76,8 +77,8 @@ class DeepfakePipeline:
             if progress_cb:
                 progress_cb(step, pct, msg)
 
-        with tempfile.TemporaryDirectory(prefix="dfotop_") as tmp:
-            tmp = Path(tmp)
+        with tempfile.TemporaryDirectory(prefix="dfotop_") as _tmp_dir:
+            tmp = Path(_tmp_dir)  # m7: avoid shadowing the context manager binding
 
             # ── Step 1: Extract audio ─────────────────────────────────────────
             _cb(ProcessingStep.EXTRACTING_AUDIO, 5, "Extraction de l'audio...")
@@ -137,7 +138,6 @@ class DeepfakePipeline:
 
             # ── Step 7: Move to output ────────────────────────────────────────
             _cb(ProcessingStep.UPLOADING_RESULT, 95, "Sauvegarde du résultat...")
-            import shutil
             shutil.copy2(final_source, output_path)
 
         _cb(ProcessingStep.UPLOADING_RESULT, 100, "Terminé !")

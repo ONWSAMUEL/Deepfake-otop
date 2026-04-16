@@ -25,11 +25,21 @@ export default function Result() {
   };
 
   const handleShare = async () => {
-    if (navigator.share) {
-      await navigator.share({ title: "Deepfake OTOP", url: window.location.href });
-    } else {
-      await navigator.clipboard.writeText(window.location.href);
-      alert("Lien copié dans le presse-papiers !");
+    // m14: Wrap in try/catch — navigator.share() throws AbortError if the user
+    // dismisses the share sheet, and NotAllowedError if permissions are denied.
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: "Deepfake OTOP", url: window.location.href });
+      } else {
+        await navigator.clipboard.writeText(window.location.href);
+        alert("Lien copié dans le presse-papiers !");
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        // User cancelled — no action needed
+        return;
+      }
+      console.warn("Share failed:", err);
     }
   };
 

@@ -47,8 +47,9 @@ export default function SettingsScreen({ navigation }: Props) {
   const handleTest = async () => {
     setTesting(true);
     setTestResult(null);
-    await StorageService.setApiUrl(apiUrl.trim());
-    const ok = await checkHealth();
+    // M29: Test connectivity against the typed URL BEFORE persisting it.
+    // If the URL is bad we must not overwrite the previously working value.
+    const ok = await checkHealth(apiUrl.trim());
     setTestResult(ok);
     setTesting(false);
     Haptics.notificationAsync(

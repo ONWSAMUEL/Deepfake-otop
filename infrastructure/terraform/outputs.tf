@@ -39,8 +39,14 @@ output "ecr_worker_url" {
 }
 
 output "redis_endpoint" {
-  description = "Redis endpoint (ElastiCache)"
-  value       = aws_elasticache_cluster.redis.cache_nodes[0].address
+  description = "Redis primary endpoint (ElastiCache replication group)"
+  value       = aws_elasticache_replication_group.redis.primary_endpoint_address
+  sensitive   = true
+}
+
+output "redis_url" {
+  description = "Redis connection URL with TLS (rediss://)"
+  value       = "rediss://${aws_elasticache_replication_group.redis.primary_endpoint_address}:6379/0"
   sensitive   = true
 }
 

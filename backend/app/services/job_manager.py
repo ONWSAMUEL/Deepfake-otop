@@ -54,9 +54,15 @@ def create_job(source_video_id: str, target_image_id: str, options: dict) -> str
 
 def update_progress(job_id: str, step: str, percent: int, message: str = ""):
     r = _r()
-    if not r.exists(_key(job_id)):
+    key = _key(job_id)
+    if not r.exists(key):
         return
-    r.hset(_key(job_id), mapping={
+    # M10: Don't overwrite a terminal state — worker may call update_progress
+    # after a race where mark_completed/mark_failed already ran.
+    current_status = r.hget(key, "status")
+    if current_status in (JobStatus.COMPLETED.value, JobStatus.FAILED.value):
+        return
+    r.hset(key, mapping={
         "status": JobStatus.PROCESSING.value,
         "step": step,
         "progress": str(percent),

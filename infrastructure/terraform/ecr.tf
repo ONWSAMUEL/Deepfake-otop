@@ -1,8 +1,9 @@
 # ─── ECR repositories ─────────────────────────────────────────────────────────
 
+# m23: IMMUTABLE tags prevent accidental overwrite of tagged releases
 resource "aws_ecr_repository" "api" {
   name                 = "${var.project_name}/api"
-  image_tag_mutability = "MUTABLE"
+  image_tag_mutability = "IMMUTABLE"
 
   image_scanning_configuration {
     scan_on_push = true
@@ -11,7 +12,7 @@ resource "aws_ecr_repository" "api" {
 
 resource "aws_ecr_repository" "worker" {
   name                 = "${var.project_name}/worker"
-  image_tag_mutability = "MUTABLE"
+  image_tag_mutability = "IMMUTABLE"
 
   image_scanning_configuration {
     scan_on_push = true
@@ -20,7 +21,7 @@ resource "aws_ecr_repository" "worker" {
 
 resource "aws_ecr_repository" "frontend" {
   name                 = "${var.project_name}/frontend"
-  image_tag_mutability = "MUTABLE"
+  image_tag_mutability = "IMMUTABLE"
 
   image_scanning_configuration {
     scan_on_push = true
@@ -46,5 +47,11 @@ resource "aws_ecr_lifecycle_policy" "api" {
 
 resource "aws_ecr_lifecycle_policy" "worker" {
   repository = aws_ecr_repository.worker.name
+  policy     = aws_ecr_lifecycle_policy.api.policy
+}
+
+# m31: Add lifecycle policy for frontend repository
+resource "aws_ecr_lifecycle_policy" "frontend" {
+  repository = aws_ecr_repository.frontend.name
   policy     = aws_ecr_lifecycle_policy.api.policy
 }

@@ -1,14 +1,17 @@
 """Media upload & download endpoints."""
+import sys
 import uuid
 import logging
 import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Request
 from fastapi.responses import FileResponse
 
+from app.api.deps import limiter, require_api_key
 from app.config import settings
 from app.models.schemas import MediaType, UploadResponse
+from app.services import video_processor as _vp
 from app.services.storage import storage
 
 router = APIRouter(prefix="/media", tags=["Media"])
@@ -16,6 +19,8 @@ logger = logging.getLogger(__name__)
 
 ALLOWED_VIDEO_TYPES = {"video/mp4", "video/quicktime", "video/x-msvideo", "video/webm"}
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
+
+_video_proc = _vp.VideoProcessor()
 
 
 def _max_bytes(media_type: MediaType) -> int:
@@ -40,10 +45,12 @@ def _validate_content_type(file: UploadFile, media_type: MediaType) -> None:
 
 
 @router.post("/upload", response_model=UploadResponse)
+@limiter.limit(settings.RATE_LIMIT_UPLOAD)  # C2: rate limit per IP
 async def upload_file(
     request: Request,
     file: UploadFile = File(...),
     media_type: MediaType = Form(...),
+    _auth=Depends(require_api_key),  # C1: API key auth
 ):
     """Upload a source video or target person image.
 
@@ -99,11 +106,28 @@ async def upload_file(
     final_path = settings.UPLOAD_DIR / filename
     tmp_path.rename(final_path)
 
+    # M2: Validate video duration after upload
+    if media_type == MediaType.SOURCE_VIDEO:
+        try:
+            info = _video_proc.get_video_info(str(final_path))
+            max_dur = settings.MAX_VIDEO_DURATION_SECONDS
+            if info["duration_seconds"] > max_dur:
+                final_path.unlink(missing_ok=True)
+                raise HTTPException(
+                    400,
+                    f"Vidéo trop longue ({info['duration_seconds']:.0f}s). Maximum: {max_dur}s.",
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"Could not validate video duration: {e}")
+
     # Build storage key and public URL
     key = f"uploads/{filename}"
     if settings.STORAGE_BACKEND == "s3":
-        with open(final_path, "rb") as fh:
-            key = storage.save_upload(fh.read(), filename)
+        # M3: Use streaming upload rather than loading the entire file into RAM
+        storage.save_upload_file(str(final_path), filename)
+        key = f"uploads/{filename}"
         final_path.unlink(missing_ok=True)
 
     url = storage.get_url(key, base_url=str(request.base_url).rstrip("/"))

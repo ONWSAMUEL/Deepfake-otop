@@ -97,6 +97,18 @@ variable "secret_key" {
   sensitive   = true
 }
 
+variable "redis_auth_token" {
+  description = "Auth token for Redis TLS connections (minimum 16 characters)"
+  type        = string
+  sensitive   = true
+}
+
+variable "api_key" {
+  description = "API key clients must send in the X-API-Key header"
+  type        = string
+  sensitive   = true
+}
+
 # ─── Domain ───────────────────────────────────────────────────────────────────
 
 variable "domain_name" {

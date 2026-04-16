@@ -28,6 +28,21 @@ provider "aws" {
   }
 }
 
+# C13: ACM certificates used by CloudFront must be in us-east-1 regardless
+# of the primary deployment region.
+provider "aws" {
+  alias  = "us_east_1"
+  region = "us-east-1"
+
+  default_tags {
+    tags = {
+      Project     = var.project_name
+      Environment = var.environment
+      ManagedBy   = "Terraform"
+    }
+  }
+}
+
 # ─── Data sources ─────────────────────────────────────────────────────────────
 
 data "aws_availability_zones" "available" {

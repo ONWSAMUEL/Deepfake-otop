@@ -2,7 +2,6 @@
 Abstracted file storage — local filesystem or AWS S3.
 Configured via STORAGE_BACKEND environment variable.
 """
-import os
 import logging
 from pathlib import Path
 from typing import Optional
@@ -20,19 +19,26 @@ class StorageService:
 
     # ─── Save ────────────────────────────────────────────────────────────────
 
-    def save_upload(self, file_bytes: bytes, filename: str, subfolder: str = "uploads") -> str:
-        """Persist uploaded bytes and return the storage key."""
+    def save_upload_file(self, local_path: str, filename: str, subfolder: str = "uploads") -> str:
+        """Upload a local file to S3 using streaming (no RAM spike).
+        M3: boto3.upload_file() streams directly from disk.
+        """
+        key = f"{subfolder}/{filename}"
         if self.backend == "s3":
-            return self._s3_put(file_bytes, f"{subfolder}/{filename}")
-        return self._local_put(file_bytes, settings.UPLOAD_DIR / filename)
+            return self._s3_upload_file(local_path, key)
+        # Local backend: file is already in UPLOAD_DIR — nothing to copy
+        return f"uploads/{filename}"
 
     def save_output(self, src_path: str, filename: str) -> str:
         """Copy a processed output file to storage and return the key."""
-        with open(src_path, "rb") as f:
-            data = f.read()
+        key = f"outputs/{filename}"
         if self.backend == "s3":
-            return self._s3_put(data, f"outputs/{filename}")
-        return self._local_put(data, settings.OUTPUT_DIR / filename)
+            return self._s3_upload_file(src_path, key)
+        # Local: just copy to OUTPUT_DIR
+        import shutil
+        dest = settings.OUTPUT_DIR / filename
+        shutil.copy2(src_path, dest)
+        return key
 
     # ─── URL generation ───────────────────────────────────────────────────────
 
@@ -54,29 +60,19 @@ class StorageService:
 
     # ─── Internal ─────────────────────────────────────────────────────────────
 
-    def _local_put(self, data: bytes, path: Path) -> str:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(data)
-        logger.debug(f"Saved locally: {path}")
-        # Key = relative to UPLOAD_DIR or OUTPUT_DIR
-        if str(path).startswith(str(settings.OUTPUT_DIR)):
-            return f"outputs/{path.name}"
-        return f"uploads/{path.name}"
-
-    def _s3_put(self, data: bytes, key: str) -> str:
+    def _s3_upload_file(self, local_path: str, key: str) -> str:
+        """M3: Stream a file to S3 using boto3 upload_file — avoids loading
+        the entire file into memory (critical for 500 MB video uploads).
+        """
         import boto3
         s3 = boto3.client(
             "s3",
             region_name=settings.AWS_REGION,
-            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID or None,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY or None,
         )
-        s3.put_object(
-            Bucket=settings.S3_BUCKET_NAME,
-            Key=key,
-            Body=data,
-            ContentType=self._content_type(key),
-        )
+        extra = {"ContentType": self._content_type(key)}
+        s3.upload_file(local_path, settings.S3_BUCKET_NAME, key, ExtraArgs=extra)
         logger.debug(f"Uploaded to S3: s3://{settings.S3_BUCKET_NAME}/{key}")
         return key
 

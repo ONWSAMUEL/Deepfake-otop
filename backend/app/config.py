@@ -7,7 +7,11 @@ class Settings(BaseSettings):
     # App
     APP_NAME: str = "DeepFake OTOP"
     APP_ENV: str = "development"
-    SECRET_KEY: str = "change-me-in-production"
+    # C10: No default — the app will refuse to start if SECRET_KEY is not set
+    SECRET_KEY: str
+
+    # C1: API key for authenticating requests (leave empty to disable in local dev)
+    API_KEY: str = ""
 
     # Storage
     STORAGE_BACKEND: Literal["local", "s3"] = "local"
@@ -48,6 +52,10 @@ class Settings(BaseSettings):
     # Comma-separated list of allowed CORS origins.
     # Example: "https://app.myapp.com,https://staging.myapp.com"
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
+
+    # Rate limiting (requests per minute per IP)
+    RATE_LIMIT_UPLOAD: str = "20/minute"
+    RATE_LIMIT_JOB: str = "10/minute"
 
     class Config:
         env_file = ".env"

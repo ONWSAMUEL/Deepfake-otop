@@ -55,6 +55,9 @@ export default function ResultScreen({ navigation, route }: Props) {
         Animated.delay(2000),
         Animated.timing(successAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
       ]).start();
+
+      // m20: Remove the temp cache file — the video is now in the gallery
+      FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
     } catch (e: any) {
       Alert.alert("Erreur", e?.message || "Impossible d'enregistrer la vidéo.");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -75,6 +78,8 @@ export default function ResultScreen({ navigation, route }: Props) {
       const { uri } = await FileSystem.downloadAsync(resultUrl, localPath);
       await Sharing.shareAsync(uri, { mimeType: "video/mp4", dialogTitle: "Partager la vidéo" });
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      // m20: Clean up cache file after sharing is complete
+      FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
     } catch (e: any) {
       Alert.alert("Erreur", e?.message);
     } finally {

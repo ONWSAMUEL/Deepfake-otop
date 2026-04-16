@@ -1,8 +1,7 @@
 from pydantic import BaseModel, Field
 from enum import Enum
-from typing import Optional, Dict, Any
+from typing import Optional
 from datetime import datetime
-import uuid
 
 
 class MediaType(str, Enum):
@@ -42,7 +41,7 @@ class JobOptions(BaseModel):
     relative_motion: bool = Field(True, description="Utiliser le mouvement relatif (recommandé)")
     adapt_movement_scale: bool = Field(True, description="Adapter l'échelle des mouvements")
     lip_sync: bool = Field(True, description="Activer la synchronisation labiale")
-    enhance_face: bool = Field(False, description="Post-traitement qualité (GFPGAN)")
+    # M12: enhance_face removed — GFPGAN is not installed; clients sending this field are unaffected
 
 
 class JobCreate(BaseModel):
@@ -68,11 +67,3 @@ class JobResponse(BaseModel):
 
     class Config:
         from_attributes = True
-
-
-# ─── WebSocket messages ───────────────────────────────────────────────────────
-
-class WSMessage(BaseModel):
-    type: str  # "progress" | "completed" | "error"
-    job_id: str
-    data: Dict[str, Any]

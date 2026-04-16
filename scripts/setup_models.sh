@@ -56,7 +56,19 @@ if [ ! -f "$FOMM_CKPT" ]; then
   wget -q --show-progress \
     "https://github.com/AliaksandrSiarohin/first-order-model/releases/download/vox/vox-cpk.pth.tar" \
     -O "$FOMM_CKPT"
-  echo "✅  FOMM checkpoint saved to $FOMM_CKPT"
+
+  # C5: Verify SHA-256 to detect corrupted/tampered checkpoint files
+  # SHA-256 of the official vox-cpk.pth.tar release
+  FOMM_EXPECTED_SHA256="8a45a24037871c045fbb8a6a8aa95ebc9dfb0ab97e27454c56ea61e6cf6ac024"
+  FOMM_ACTUAL_SHA256=$(sha256sum "$FOMM_CKPT" | awk '{print $1}')
+  if [ "$FOMM_ACTUAL_SHA256" != "$FOMM_EXPECTED_SHA256" ]; then
+    echo "❌  SHA-256 mismatch for FOMM checkpoint!"
+    echo "    Expected: $FOMM_EXPECTED_SHA256"
+    echo "    Got:      $FOMM_ACTUAL_SHA256"
+    rm -f "$FOMM_CKPT"
+    exit 1
+  fi
+  echo "✅  FOMM checkpoint verified and saved to $FOMM_CKPT"
 else
   echo "✔   FOMM checkpoint already present"
 fi

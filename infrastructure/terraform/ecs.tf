@@ -63,17 +63,25 @@ resource "aws_iam_role" "ecs_task" {
   })
 }
 
+# M19: Restrict S3 permissions to specific prefixes — no wildcard on entire bucket
 resource "aws_iam_role_policy" "ecs_task_s3" {
   name = "s3-access"
   role = aws_iam_role.ecs_task.id
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
-      Resource = "${aws_s3_bucket.media.arn}/*"
-    }]
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = "${aws_s3_bucket.media.arn}/uploads/*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["s3:PutObject", "s3:GetObject"]
+        Resource = "${aws_s3_bucket.media.arn}/outputs/*"
+      }
+    ]
   })
 }
 
@@ -169,14 +177,15 @@ resource "aws_ecs_task_definition" "api" {
       { name = "S3_BUCKET_NAME",    value = var.s3_bucket_name },
       { name = "AWS_REGION",        value = var.aws_region },
       { name = "CLOUDFRONT_DOMAIN", value = aws_cloudfront_distribution.media.domain_name },
-      { name = "CELERY_BROKER_URL", value = "redis://${aws_elasticache_cluster.redis.cache_nodes[0].address}:6379/0" },
-      { name = "REDIS_URL",         value = "redis://${aws_elasticache_cluster.redis.cache_nodes[0].address}:6379/0" },
+      { name = "CELERY_BROKER_URL", value = "rediss://${aws_elasticache_replication_group.redis.primary_endpoint_address}:6379/0" },
+      { name = "REDIS_URL",         value = "rediss://${aws_elasticache_replication_group.redis.primary_endpoint_address}:6379/0" },
       { name = "EXTERNAL_BASE_URL", value = local.api_url },
       { name = "CORS_ORIGINS",      value = local.app_url },
     ]
 
     secrets = [
-      { name = "SECRET_KEY", valueFrom = aws_ssm_parameter.secret_key.arn }
+      { name = "SECRET_KEY", valueFrom = aws_ssm_parameter.secret_key.arn },
+      { name = "API_KEY",    valueFrom = aws_ssm_parameter.api_key.arn },
     ]
 
     logConfiguration = {
@@ -256,13 +265,15 @@ resource "aws_ecs_task_definition" "worker" {
       { name = "S3_BUCKET_NAME",    value = var.s3_bucket_name },
       { name = "AWS_REGION",        value = var.aws_region },
       { name = "CLOUDFRONT_DOMAIN", value = aws_cloudfront_distribution.media.domain_name },
-      { name = "CELERY_BROKER_URL", value = "redis://${aws_elasticache_cluster.redis.cache_nodes[0].address}:6379/0" },
-      { name = "REDIS_URL",         value = "redis://${aws_elasticache_cluster.redis.cache_nodes[0].address}:6379/0" },
-      { name = "EXTERNAL_BASE_URL", value = local.api_url },
+      { name = "CELERY_BROKER_URL", value = "rediss://${aws_elasticache_replication_group.redis.primary_endpoint_address}:6379/0" },
+      { name = "REDIS_URL",         value = "rediss://${aws_elasticache_replication_group.redis.primary_endpoint_address}:6379/0" },
+      { name = "EXTERNAL_BASE_URL",     value = local.api_url },
+      { name = "CELERY_RESULT_EXPIRES", value = "86400" },
     ]
 
     secrets = [
-      { name = "SECRET_KEY", valueFrom = aws_ssm_parameter.secret_key.arn }
+      { name = "SECRET_KEY", valueFrom = aws_ssm_parameter.secret_key.arn },
+      { name = "API_KEY",    valueFrom = aws_ssm_parameter.api_key.arn },
     ]
 
     logConfiguration = {
@@ -335,7 +346,8 @@ resource "aws_launch_template" "worker" {
     arn = aws_iam_instance_profile.worker.arn
   }
 
-  vpc_security_group_ids = [aws_security_group.api.id]
+  # M18: Worker instances must use the worker security group, not the API SG
+  vpc_security_group_ids = [aws_security_group.worker.id]
 
   user_data = base64encode(<<-EOF
     #!/bin/bash
@@ -422,4 +434,10 @@ resource "aws_ssm_parameter" "secret_key" {
   name  = "/${var.project_name}/secret_key"
   type  = "SecureString"
   value = var.secret_key
+}
+
+resource "aws_ssm_parameter" "api_key" {
+  name  = "/${var.project_name}/api_key"
+  type  = "SecureString"
+  value = var.api_key
 }

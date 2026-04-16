@@ -7,6 +7,9 @@ resource "aws_cloudfront_distribution" "media" {
   price_class         = var.cloudfront_price_class
   default_root_object = ""
 
+  # C11: Custom domain alias — requires ACM cert in us-east-1
+  aliases = ["${var.app_subdomain}.${var.domain_name}"]
+
   origin {
     domain_name              = aws_s3_bucket.media.bucket_regional_domain_name
     origin_id                = "S3-${var.s3_bucket_name}"
@@ -56,13 +59,14 @@ resource "aws_cloudfront_distribution" "media" {
     }
   }
 
+  # C11: Use the ACM certificate (must be validated in us-east-1 before apply)
   viewer_certificate {
-    cloudfront_default_certificate = true
-    # For custom domain:
-    # acm_certificate_arn      = aws_acm_certificate.cert.arn
-    # ssl_support_method       = "sni-only"
-    # minimum_protocol_version = "TLSv1.2_2021"
+    acm_certificate_arn      = aws_acm_certificate_validation.main.certificate_arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
   }
+
+  depends_on = [aws_acm_certificate_validation.main]
 
   tags = { Name = "${var.project_name}-media-cdn" }
 }

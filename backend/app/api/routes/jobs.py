@@ -4,19 +4,27 @@ import uuid
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
+from app.api.deps import limiter, require_api_key
 from app.config import settings
 from app.models.schemas import JobCreate, JobResponse
 from app.services import job_manager
 from app.services.storage import storage
+# M11: Module-level import avoids repeated import overhead and circular import risk
+from app.workers.tasks import process_deepfake
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
 logger = logging.getLogger(__name__)
 
 
 @router.post("", response_model=JobResponse, status_code=202)
-async def create_job(payload: JobCreate, request: Request):
+@limiter.limit(settings.RATE_LIMIT_JOB)  # C2: rate limit per IP
+async def create_job(
+    request: Request,
+    payload: JobCreate,
+    _auth=Depends(require_api_key),  # C1: API key auth
+):
     """
     Create a new deepfake processing job.
 
@@ -40,7 +48,6 @@ async def create_job(payload: JobCreate, request: Request):
     )
 
     # Dispatch Celery task
-    from app.workers.tasks import process_deepfake
     process_deepfake.apply_async(
         kwargs={
             "job_id": job_id,
@@ -58,8 +65,14 @@ async def create_job(payload: JobCreate, request: Request):
 
 
 @router.get("/{job_id}", response_model=JobResponse)
-async def get_job(job_id: str, request: Request):
+async def get_job(
+    job_id: str,
+    request: Request,
+    _auth=Depends(require_api_key),  # C1: API key auth
+):
     """Get the current status of a processing job."""
+    if not _UUID_RE.match(job_id):
+        raise HTTPException(400, "ID de job invalide.")
     job = job_manager.get_job_response(job_id)
     if job is None:
         raise HTTPException(404, f"Job {job_id} introuvable.")

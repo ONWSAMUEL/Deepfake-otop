@@ -48,6 +48,9 @@ ffmpeg-python==0.2.0
 # ─── Sync BatchNorm (required by FOMM) ─────────────────────────────────────
 # installed from FOMM repo: sync_batchnorm
 
+# ─── Rate limiting ──────────────────────────────────────────────────────────
+slowapi==0.1.9
+
 # ─── Utilities ──────────────────────────────────────────────────────────────
 python-dotenv==1.0.1
 PyYAML==6.0.1
